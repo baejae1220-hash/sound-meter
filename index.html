@@ -122,7 +122,7 @@
     height: 100%;
     width: 0%;
     border-radius: 999px;
-    transition: width .08s linear;
+    transition: width .25s ease;
     background: linear-gradient(90deg, #9FA8DA, #676fb2);
   }
 
@@ -176,6 +176,8 @@
 
   .startBtn { background: #5a63a5; color: white; }
   .stopBtn  { background: #eef0f8; color: #4e5677; }
+  .freezeBtn { background: #fff0d8; color: #755820; }
+  .freezeBtn.frozen { background: #ffcf88; color: #5e430f; }
 
   .status {
     max-width: 780px;
@@ -198,9 +200,22 @@
     font-size: 16px;
   }
 
+  .frozen-note {
+    display: none;
+    text-align: center;
+    margin-top: 10px;
+    font-size: 17px;
+    color: #8a611a;
+  }
+
+  .frozen-note.show {
+    display: block;
+  }
+
   @media (max-width: 640px) {
     .tab-btn { font-size: 17px; }
     .card { padding: 23px 17px; }
+    button.control { font-size: 17px; }
   }
 </style>
 </head>
@@ -237,8 +252,11 @@
 
       <div class="controls">
         <button class="control startBtn" id="pitchStartBtn">▶ 높낮이 측정 시작</button>
+        <button class="control freezeBtn" id="pitchFreezeBtn">📌 값 고정</button>
         <button class="control stopBtn" id="pitchStopBtn">■ 측정 멈춤</button>
       </div>
+
+      <div id="pitchFrozenNote" class="frozen-note">📌 현재 값이 고정되어 있어요.</div>
     </div>
 
     <div class="status" id="pitchStatus">
@@ -246,7 +264,7 @@
     </div>
 
     <div class="tip">
-      💡 같은 악기나 물체에서 여러 소리를 내 보고, <b>Hz 값이 커질수록 소리가 어떻게 달라지는지</b> 관찰해 보세요.
+      💡 화면 숫자는 너무 빠르게 바뀌지 않도록 <b>약 0.5초마다 안정된 값</b>으로 보여 줍니다.
     </div>
   </section>
 
@@ -278,8 +296,11 @@
 
       <div class="controls">
         <button class="control startBtn" id="dbStartBtn">▶ 세기 측정 시작</button>
+        <button class="control freezeBtn" id="dbFreezeBtn">📌 값 고정</button>
         <button class="control stopBtn" id="dbStopBtn">■ 측정 멈춤</button>
       </div>
+
+      <div id="dbFrozenNote" class="frozen-note">📌 현재 값이 고정되어 있어요.</div>
     </div>
 
     <div class="status" id="dbStatus">
@@ -287,7 +308,7 @@
     </div>
 
     <div class="tip">
-      💡 같은 물체에서 소리를 약하게, 세게 내 보면서 <b>dB 값의 변화</b>를 비교해 보세요.<br>
+      💡 소리를 약하게, 세게 내 보면서 값의 변화를 비교해 보세요.<br>
       ※ 측정값은 사용하는 기기와 마이크에 따라 조금 달라질 수 있어요.
     </div>
   </section>
@@ -301,15 +322,31 @@ let stream = null;
 let runningMode = null;
 let animationId = null;
 
+let pitchFrozen = false;
+let dbFrozen = false;
+
+let pitchSamples = [];
+let dbSamples = [];
+let lastPitchDisplay = 0;
+let lastDbDisplay = 0;
+
+const DISPLAY_INTERVAL = 500; // 0.5초마다 화면 갱신
+const MAX_SAMPLES = 12;
+
 const pitchValue = document.getElementById('pitchValue');
 const pitchDesc = document.getElementById('pitchDesc');
 const pitchFill = document.getElementById('pitchFill');
 const pitchStatus = document.getElementById('pitchStatus');
+const pitchFreezeBtn = document.getElementById('pitchFreezeBtn');
+const pitchFrozenNote = document.getElementById('pitchFrozenNote');
 
 const dbValue = document.getElementById('dbValue');
 const dbDesc = document.getElementById('dbDesc');
 const dbFill = document.getElementById('dbFill');
 const dbStatus = document.getElementById('dbStatus');
+const dbFreezeBtn = document.getElementById('dbFreezeBtn');
+const dbFrozenNote = document.getElementById('dbFrozenNote');
+
 const quietLevel = document.getElementById('quietLevel');
 const normalLevel = document.getElementById('normalLevel');
 const loudLevel = document.getElementById('loudLevel');
@@ -330,9 +367,22 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 
 document.getElementById('pitchStartBtn').addEventListener('click', () => startMeasurement('pitch'));
 document.getElementById('pitchStopBtn').addEventListener('click', stopMeasurement);
-
 document.getElementById('dbStartBtn').addEventListener('click', () => startMeasurement('db'));
 document.getElementById('dbStopBtn').addEventListener('click', stopMeasurement);
+
+pitchFreezeBtn.addEventListener('click', () => {
+  pitchFrozen = !pitchFrozen;
+  pitchFreezeBtn.textContent = pitchFrozen ? '▶ 값 다시 보기' : '📌 값 고정';
+  pitchFreezeBtn.classList.toggle('frozen', pitchFrozen);
+  pitchFrozenNote.classList.toggle('show', pitchFrozen);
+});
+
+dbFreezeBtn.addEventListener('click', () => {
+  dbFrozen = !dbFrozen;
+  dbFreezeBtn.textContent = dbFrozen ? '▶ 값 다시 보기' : '📌 값 고정';
+  dbFreezeBtn.classList.toggle('frozen', dbFrozen);
+  dbFrozenNote.classList.toggle('show', dbFrozen);
+});
 
 async function startMeasurement(mode) {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -343,7 +393,9 @@ async function startMeasurement(mode) {
   }
 
   if (runningMode === mode) return;
+
   await stopMeasurement();
+  resetFreeze(mode);
 
   try {
     stream = await navigator.mediaDevices.getUserMedia({
@@ -362,7 +414,7 @@ async function startMeasurement(mode) {
 
     analyser = audioContext.createAnalyser();
     analyser.fftSize = 2048;
-    analyser.smoothingTimeConstant = 0.15;
+    analyser.smoothingTimeConstant = 0.2;
 
     source = audioContext.createMediaStreamSource(stream);
     source.connect(analyser);
@@ -370,15 +422,19 @@ async function startMeasurement(mode) {
     runningMode = mode;
 
     if (mode === 'pitch') {
+      pitchSamples = [];
+      lastPitchDisplay = 0;
       pitchStatus.textContent = '소리의 높낮이를 측정하고 있어요. 일정한 소리를 내 보세요.';
       updatePitch();
     } else {
+      dbSamples = [];
+      lastDbDisplay = 0;
       dbStatus.textContent = '소리의 세기를 측정하고 있어요. 소리를 내 보세요.';
       updateDb();
     }
 
   } catch (err) {
-    let msg = '마이크 사용 권한이 필요합니다. 주소창의 자물쇠 아이콘에서 마이크를 허용해 주세요.';
+    let msg = '마이크 사용 권한이 필요합니다. 주소창의 사이트 설정에서 마이크를 허용해 주세요.';
     if (err && err.name === 'NotAllowedError') {
       msg = '마이크 사용이 차단되어 있어요. 주소창의 사이트 설정에서 마이크를 허용한 뒤 다시 시도해 주세요.';
     } else if (err && err.name === 'NotFoundError') {
@@ -412,21 +468,52 @@ async function stopMeasurement() {
   source = null;
 }
 
+function resetFreeze(mode) {
+  if (mode === 'pitch') {
+    pitchFrozen = false;
+    pitchFreezeBtn.textContent = '📌 값 고정';
+    pitchFreezeBtn.classList.remove('frozen');
+    pitchFrozenNote.classList.remove('show');
+  } else {
+    dbFrozen = false;
+    dbFreezeBtn.textContent = '📌 값 고정';
+    dbFreezeBtn.classList.remove('frozen');
+    dbFrozenNote.classList.remove('show');
+  }
+}
+
 function resetDisplay() {
+  pitchSamples = [];
+  dbSamples = [];
+
   pitchValue.textContent = '--';
   pitchDesc.textContent = '측정 시작 버튼을 눌러 주세요.';
   pitchFill.style.width = '0%';
   pitchStatus.textContent = '측정 시작 버튼을 눌러 마이크 사용을 허용하세요.';
+  resetFreeze('pitch');
 
   dbValue.textContent = '--';
   dbDesc.textContent = '측정 시작 버튼을 눌러 주세요.';
   dbFill.style.width = '0%';
   dbStatus.textContent = '측정 시작 버튼을 눌러 마이크 사용을 허용하세요.';
+  resetFreeze('db');
 
   [quietLevel, normalLevel, loudLevel].forEach(el => el.classList.remove('active'));
 }
 
-function updatePitch() {
+function median(values) {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function average(values) {
+  if (!values.length) return null;
+  return values.reduce((a, b) => a + b, 0) / values.length;
+}
+
+function updatePitch(timestamp = 0) {
   if (runningMode !== 'pitch' || !analyser) return;
 
   const data = new Float32Array(analyser.fftSize);
@@ -435,29 +522,38 @@ function updatePitch() {
   const rms = Math.sqrt(data.reduce((sum, x) => sum + x * x, 0) / data.length);
   const pitch = autoCorrelate(data, audioContext.sampleRate);
 
-  if (pitch > 0 && rms > 0.01) {
-    const roundedPitch = Math.round(pitch);
-    pitchValue.textContent = roundedPitch;
+  if (pitch > 50 && pitch < 2000 && rms > 0.01) {
+    pitchSamples.push(pitch);
+    if (pitchSamples.length > MAX_SAMPLES) pitchSamples.shift();
+  }
 
-    if (roundedPitch < 180) {
-      pitchDesc.textContent = '낮은 소리 쪽이에요.';
-    } else if (roundedPitch < 500) {
-      pitchDesc.textContent = '중간 정도 높이의 소리예요.';
+  if (!pitchFrozen && timestamp - lastPitchDisplay >= DISPLAY_INTERVAL) {
+    lastPitchDisplay = timestamp;
+
+    if (pitchSamples.length >= 3) {
+      const stablePitch = Math.round(median(pitchSamples));
+      pitchValue.textContent = stablePitch;
+
+      if (stablePitch < 180) {
+        pitchDesc.textContent = '낮은 소리 쪽이에요.';
+      } else if (stablePitch < 500) {
+        pitchDesc.textContent = '중간 정도 높이의 소리예요.';
+      } else {
+        pitchDesc.textContent = '높은 소리 쪽이에요.';
+      }
+
+      pitchFill.style.width = Math.max(0, Math.min(100, stablePitch / 10)) + '%';
     } else {
-      pitchDesc.textContent = '높은 소리 쪽이에요.';
+      pitchValue.textContent = '--';
+      pitchDesc.textContent = '뚜렷한 높낮이를 찾고 있어요.';
+      pitchFill.style.width = '0%';
     }
-
-    pitchFill.style.width = Math.max(0, Math.min(100, roundedPitch / 10)) + '%';
-  } else {
-    pitchValue.textContent = '--';
-    pitchDesc.textContent = '뚜렷한 높낮이를 찾고 있어요.';
-    pitchFill.style.width = '0%';
   }
 
   animationId = requestAnimationFrame(updatePitch);
 }
 
-function updateDb() {
+function updateDb(timestamp = 0) {
   if (runningMode !== 'db' || !analyser) return;
 
   const data = new Float32Array(analyser.fftSize);
@@ -465,24 +561,32 @@ function updateDb() {
 
   const rms = Math.sqrt(data.reduce((sum, x) => sum + x * x, 0) / data.length);
   const dbfs = rms > 0 ? 20 * Math.log10(rms) : -100;
-
   const approxDb = Math.max(30, Math.min(100, dbfs + 100));
-  dbValue.textContent = Math.round(approxDb);
 
-  [quietLevel, normalLevel, loudLevel].forEach(el => el.classList.remove('active'));
+  dbSamples.push(approxDb);
+  if (dbSamples.length > MAX_SAMPLES) dbSamples.shift();
 
-  if (approxDb < 50) {
-    dbDesc.textContent = '조용한 소리예요.';
-    quietLevel.classList.add('active');
-  } else if (approxDb < 75) {
-    dbDesc.textContent = '보통 크기의 소리예요.';
-    normalLevel.classList.add('active');
-  } else {
-    dbDesc.textContent = '큰 소리예요.';
-    loudLevel.classList.add('active');
+  if (!dbFrozen && timestamp - lastDbDisplay >= DISPLAY_INTERVAL) {
+    lastDbDisplay = timestamp;
+
+    const stableDb = Math.round(average(dbSamples));
+    dbValue.textContent = stableDb;
+
+    [quietLevel, normalLevel, loudLevel].forEach(el => el.classList.remove('active'));
+
+    if (stableDb < 50) {
+      dbDesc.textContent = '조용한 소리예요.';
+      quietLevel.classList.add('active');
+    } else if (stableDb < 75) {
+      dbDesc.textContent = '보통 크기의 소리예요.';
+      normalLevel.classList.add('active');
+    } else {
+      dbDesc.textContent = '큰 소리예요.';
+      loudLevel.classList.add('active');
+    }
+
+    dbFill.style.width = Math.max(0, Math.min(100, ((stableDb - 30) / 70) * 100)) + '%';
   }
-
-  dbFill.style.width = Math.max(0, Math.min(100, ((approxDb - 30) / 70) * 100)) + '%';
 
   animationId = requestAnimationFrame(updateDb);
 }
