@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>소리 탐구 측정기</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Jua&display=swap');
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: 'Jua', sans-serif;
+    background: linear-gradient(180deg, #eef7ff 0%, #ffffff 100%);
+    color: #24324a;
+  }
+
+  .wrap {
+    width: min(1000px, 94vw);
+    margin: 0 auto;
+    padding: 28px 0 40px;
+  }
+
+  h1 {
+    text-align: center;
+    margin: 0 0 8px;
+    font-size: clamp(34px, 5vw, 54px);
+  }
+
+  .sub {
+    text-align: center;
+    color: #64718a;
+    font-size: 18px;
+    margin-bottom: 24px;
+  }
+
+  .tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    max-width: 700px;
+    margin: 0 auto 24px;
+    background: white;
+    padding: 7px;
+    border-radius: 20px;
+    box-shadow: 0 8px 24px rgba(75, 91, 133, .12);
+    gap: 7px;
+  }
+
+  .tab-btn {
+    border: 0;
+    border-radius: 15px;
+    padding: 15px 12px;
+    font-family: inherit;
+    font-size: 21px;
+    cursor: pointer;
+    background: #f0f2f7;
+    color: #707b91;
+    transition: .2s;
+  }
+
+  .tab-btn.active {
+    background: #5a63a5;
+    color: white;
+    box-shadow: 0 5px 12px rgba(90, 99, 165, .22);
+  }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .card {
+    max-width: 780px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 26px;
+    padding: 30px;
+    box-shadow: 0 12px 30px rgba(74, 89, 130, .12);
+    border: 2px solid #edf1f7;
+  }
+
+  .card h2 {
+    margin: 0;
+    text-align: center;
+    font-size: 31px;
+  }
+
+  .label {
+    text-align: center;
+    font-size: 17px;
+    color: #738099;
+    margin: 7px 0 22px;
+  }
+
+  .big {
+    text-align: center;
+    font-size: clamp(60px, 10vw, 100px);
+    line-height: 1;
+    margin: 20px 0 8px;
+  }
+
+  .unit {
+    font-size: 30px;
+    color: #69758d;
+  }
+
+  .desc {
+    text-align: center;
+    font-size: 22px;
+    min-height: 34px;
+    margin: 14px 0;
+  }
+
+  .meter {
+    height: 32px;
+    background: #edf0f4;
+    border-radius: 999px;
+    overflow: hidden;
+    margin: 18px 0 8px;
+  }
+
+  .fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 999px;
+    transition: width .08s linear;
+    background: linear-gradient(90deg, #9FA8DA, #676fb2);
+  }
+
+  .scale {
+    display: flex;
+    justify-content: space-between;
+    font-size: 15px;
+    color: #8893a6;
+  }
+
+  .levels {
+    display: flex;
+    justify-content: center;
+    gap: 9px;
+    flex-wrap: wrap;
+    margin: 12px 0 2px;
+  }
+
+  .level-chip {
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: #f0f2f6;
+    color: #7b8496;
+    font-size: 16px;
+    transition: .15s;
+  }
+
+  .level-chip.active {
+    background: #e6e9fa;
+    color: #4f5792;
+    transform: scale(1.04);
+  }
+
+  .controls {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 24px;
+    flex-wrap: wrap;
+  }
+
+  button.control {
+    border: 0;
+    border-radius: 16px;
+    padding: 14px 23px;
+    font-family: inherit;
+    font-size: 19px;
+    cursor: pointer;
+    box-shadow: 0 6px 14px rgba(0,0,0,.08);
+  }
+
+  .startBtn { background: #5a63a5; color: white; }
+  .stopBtn  { background: #eef0f8; color: #4e5677; }
+
+  .status {
+    max-width: 780px;
+    margin: 18px auto 0;
+    text-align: center;
+    background: #f7f9fd;
+    padding: 13px;
+    border-radius: 15px;
+    color: #5f6d86;
+    font-size: 16px;
+  }
+
+  .tip {
+    max-width: 780px;
+    margin: 18px auto 0;
+    background: #fff7e9;
+    border-radius: 18px;
+    padding: 16px 19px;
+    line-height: 1.6;
+    font-size: 16px;
+  }
+
+  @media (max-width: 640px) {
+    .tab-btn { font-size: 17px; }
+    .card { padding: 23px 17px; }
+  }
+</style>
+</head>
+
+<body>
+<div class="wrap">
+  <h1>🎤 소리 탐구 측정기</h1>
+  <div class="sub">측정하고 싶은 소리의 성질을 선택해 보세요.</div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="pitchPanel">🎵 소리의 높낮이</button>
+    <button class="tab-btn" data-tab="volumePanel">🔊 소리의 세기</button>
+  </div>
+
+  <section id="pitchPanel" class="panel active">
+    <div class="card">
+      <h2>🎵 소리의 높낮이 측정</h2>
+      <div class="label">소리의 진동수를 Hz(헤르츠)로 나타냅니다.</div>
+
+      <div class="big">
+        <span id="pitchValue">--</span>
+        <span class="unit">Hz</span>
+      </div>
+
+      <div class="desc" id="pitchDesc">측정 시작 버튼을 눌러 주세요.</div>
+
+      <div class="meter">
+        <div class="fill" id="pitchFill"></div>
+      </div>
+      <div class="scale">
+        <span>낮은 소리</span>
+        <span>높은 소리</span>
+      </div>
+
+      <div class="controls">
+        <button class="control startBtn" id="pitchStartBtn">▶ 높낮이 측정 시작</button>
+        <button class="control stopBtn" id="pitchStopBtn">■ 측정 멈춤</button>
+      </div>
+    </div>
+
+    <div class="status" id="pitchStatus">
+      측정 시작 버튼을 눌러 마이크 사용을 허용하세요.
+    </div>
+
+    <div class="tip">
+      💡 같은 악기나 물체에서 여러 소리를 내 보고, <b>Hz 값이 커질수록 소리가 어떻게 달라지는지</b> 관찰해 보세요.
+    </div>
+  </section>
+
+  <section id="volumePanel" class="panel">
+    <div class="card">
+      <h2>🔊 소리의 세기 측정</h2>
+      <div class="label">소리의 크기를 dB(데시벨)로 나타냅니다.</div>
+
+      <div class="big">
+        <span id="dbValue">--</span>
+        <span class="unit">dB</span>
+      </div>
+
+      <div class="desc" id="dbDesc">측정 시작 버튼을 눌러 주세요.</div>
+
+      <div class="levels">
+        <span id="quietLevel" class="level-chip">🤫 조용함</span>
+        <span id="normalLevel" class="level-chip">🙂 보통</span>
+        <span id="loudLevel" class="level-chip">📣 큼</span>
+      </div>
+
+      <div class="meter">
+        <div class="fill" id="dbFill"></div>
+      </div>
+      <div class="scale">
+        <span>작은 소리</span>
+        <span>큰 소리</span>
+      </div>
+
+      <div class="controls">
+        <button class="control startBtn" id="dbStartBtn">▶ 세기 측정 시작</button>
+        <button class="control stopBtn" id="dbStopBtn">■ 측정 멈춤</button>
+      </div>
+    </div>
+
+    <div class="status" id="dbStatus">
+      측정 시작 버튼을 눌러 마이크 사용을 허용하세요.
+    </div>
+
+    <div class="tip">
+      💡 같은 물체에서 소리를 약하게, 세게 내 보면서 <b>dB 값의 변화</b>를 비교해 보세요.<br>
+      ※ 측정값은 사용하는 기기와 마이크에 따라 조금 달라질 수 있어요.
+    </div>
+  </section>
+</div>
+
+<script>
+let audioContext = null;
+let analyser = null;
+let source = null;
+let stream = null;
+let runningMode = null;
+let animationId = null;
+
+const pitchValue = document.getElementById('pitchValue');
+const pitchDesc = document.getElementById('pitchDesc');
+const pitchFill = document.getElementById('pitchFill');
+const pitchStatus = document.getElementById('pitchStatus');
+
+const dbValue = document.getElementById('dbValue');
+const dbDesc = document.getElementById('dbDesc');
+const dbFill = document.getElementById('dbFill');
+const dbStatus = document.getElementById('dbStatus');
+const quietLevel = document.getElementById('quietLevel');
+const normalLevel = document.getElementById('normalLevel');
+const loudLevel = document.getElementById('loudLevel');
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    await stopMeasurement();
+
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).classList.add('active');
+
+    resetDisplay();
+  });
+});
+
+document.getElementById('pitchStartBtn').addEventListener('click', () => startMeasurement('pitch'));
+document.getElementById('pitchStopBtn').addEventListener('click', stopMeasurement);
+
+document.getElementById('dbStartBtn').addEventListener('click', () => startMeasurement('db'));
+document.getElementById('dbStopBtn').addEventListener('click', stopMeasurement);
+
+async function startMeasurement(mode) {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    const msg = '이 브라우저에서는 마이크 기능을 사용할 수 없습니다. Chrome 최신 버전에서 열어 주세요.';
+    if (mode === 'pitch') pitchStatus.textContent = msg;
+    else dbStatus.textContent = msg;
+    return;
+  }
+
+  if (runningMode === mode) return;
+  await stopMeasurement();
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false
+      }
+    });
+
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+    if (audioContext.state === 'suspended') {
+      await audioContext.resume();
+    }
+
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.15;
+
+    source = audioContext.createMediaStreamSource(stream);
+    source.connect(analyser);
+
+    runningMode = mode;
+
+    if (mode === 'pitch') {
+      pitchStatus.textContent = '소리의 높낮이를 측정하고 있어요. 일정한 소리를 내 보세요.';
+      updatePitch();
+    } else {
+      dbStatus.textContent = '소리의 세기를 측정하고 있어요. 소리를 내 보세요.';
+      updateDb();
+    }
+
+  } catch (err) {
+    let msg = '마이크 사용 권한이 필요합니다. 주소창의 자물쇠 아이콘에서 마이크를 허용해 주세요.';
+    if (err && err.name === 'NotAllowedError') {
+      msg = '마이크 사용이 차단되어 있어요. 주소창의 사이트 설정에서 마이크를 허용한 뒤 다시 시도해 주세요.';
+    } else if (err && err.name === 'NotFoundError') {
+      msg = '사용할 수 있는 마이크를 찾지 못했어요.';
+    }
+
+    if (mode === 'pitch') pitchStatus.textContent = msg;
+    else dbStatus.textContent = msg;
+  }
+}
+
+async function stopMeasurement() {
+  runningMode = null;
+
+  if (animationId) {
+    cancelAnimationFrame(animationId);
+    animationId = null;
+  }
+
+  if (stream) {
+    stream.getTracks().forEach(track => track.stop());
+    stream = null;
+  }
+
+  if (audioContext && audioContext.state !== 'closed') {
+    try { await audioContext.close(); } catch (e) {}
+  }
+
+  audioContext = null;
+  analyser = null;
+  source = null;
+}
+
+function resetDisplay() {
+  pitchValue.textContent = '--';
+  pitchDesc.textContent = '측정 시작 버튼을 눌러 주세요.';
+  pitchFill.style.width = '0%';
+  pitchStatus.textContent = '측정 시작 버튼을 눌러 마이크 사용을 허용하세요.';
+
+  dbValue.textContent = '--';
+  dbDesc.textContent = '측정 시작 버튼을 눌러 주세요.';
+  dbFill.style.width = '0%';
+  dbStatus.textContent = '측정 시작 버튼을 눌러 마이크 사용을 허용하세요.';
+
+  [quietLevel, normalLevel, loudLevel].forEach(el => el.classList.remove('active'));
+}
+
+function updatePitch() {
+  if (runningMode !== 'pitch' || !analyser) return;
+
+  const data = new Float32Array(analyser.fftSize);
+  analyser.getFloatTimeDomainData(data);
+
+  const rms = Math.sqrt(data.reduce((sum, x) => sum + x * x, 0) / data.length);
+  const pitch = autoCorrelate(data, audioContext.sampleRate);
+
+  if (pitch > 0 && rms > 0.01) {
+    const roundedPitch = Math.round(pitch);
+    pitchValue.textContent = roundedPitch;
+
+    if (roundedPitch < 180) {
+      pitchDesc.textContent = '낮은 소리 쪽이에요.';
+    } else if (roundedPitch < 500) {
+      pitchDesc.textContent = '중간 정도 높이의 소리예요.';
+    } else {
+      pitchDesc.textContent = '높은 소리 쪽이에요.';
+    }
+
+    pitchFill.style.width = Math.max(0, Math.min(100, roundedPitch / 10)) + '%';
+  } else {
+    pitchValue.textContent = '--';
+    pitchDesc.textContent = '뚜렷한 높낮이를 찾고 있어요.';
+    pitchFill.style.width = '0%';
+  }
+
+  animationId = requestAnimationFrame(updatePitch);
+}
+
+function updateDb() {
+  if (runningMode !== 'db' || !analyser) return;
+
+  const data = new Float32Array(analyser.fftSize);
+  analyser.getFloatTimeDomainData(data);
+
+  const rms = Math.sqrt(data.reduce((sum, x) => sum + x * x, 0) / data.length);
+  const dbfs = rms > 0 ? 20 * Math.log10(rms) : -100;
+
+  const approxDb = Math.max(30, Math.min(100, dbfs + 100));
+  dbValue.textContent = Math.round(approxDb);
+
+  [quietLevel, normalLevel, loudLevel].forEach(el => el.classList.remove('active'));
+
+  if (approxDb < 50) {
+    dbDesc.textContent = '조용한 소리예요.';
+    quietLevel.classList.add('active');
+  } else if (approxDb < 75) {
+    dbDesc.textContent = '보통 크기의 소리예요.';
+    normalLevel.classList.add('active');
+  } else {
+    dbDesc.textContent = '큰 소리예요.';
+    loudLevel.classList.add('active');
+  }
+
+  dbFill.style.width = Math.max(0, Math.min(100, ((approxDb - 30) / 70) * 100)) + '%';
+
+  animationId = requestAnimationFrame(updateDb);
+}
+
+function autoCorrelate(buf, sampleRate) {
+  let SIZE = buf.length;
+  let rms = 0;
+
+  for (let i = 0; i < SIZE; i++) rms += buf[i] * buf[i];
+  rms = Math.sqrt(rms / SIZE);
+  if (rms < 0.01) return -1;
+
+  let r1 = 0, r2 = SIZE - 1, thres = 0.2;
+
+  for (let i = 0; i < SIZE / 2; i++) {
+    if (Math.abs(buf[i]) < thres) {
+      r1 = i;
+      break;
+    }
+  }
+
+  for (let i = 1; i < SIZE / 2; i++) {
+    if (Math.abs(buf[SIZE - i]) < thres) {
+      r2 = SIZE - i;
+      break;
+    }
+  }
+
+  buf = buf.slice(r1, r2);
+  SIZE = buf.length;
+
+  const c = new Array(SIZE).fill(0);
+
+  for (let i = 0; i < SIZE; i++) {
+    for (let j = 0; j < SIZE - i; j++) {
+      c[i] += buf[j] * buf[j + i];
+    }
+  }
+
+  let d = 0;
+  while (d + 1 < SIZE && c[d] > c[d + 1]) d++;
+
+  let maxval = -1;
+  let maxpos = -1;
+
+  for (let i = d; i < SIZE; i++) {
+    if (c[i] > maxval) {
+      maxval = c[i];
+      maxpos = i;
+    }
+  }
+
+  let T0 = maxpos;
+  if (T0 <= 0) return -1;
+
+  const x1 = c[T0 - 1] || c[T0];
+  const x2 = c[T0];
+  const x3 = c[T0 + 1] || c[T0];
+  const a = (x1 + x3 - 2 * x2) / 2;
+  const b = (x3 - x1) / 2;
+
+  if (a) T0 = T0 - b / (2 * a);
+
+  return sampleRate / T0;
+}
+</script>
+</body>
+</html>
